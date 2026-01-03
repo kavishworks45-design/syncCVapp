@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FaCloudUploadAlt, FaMagic, FaFilePdf, FaArrowLeft, FaLink, FaExclamationTriangle, FaCheckCircle } from 'react-icons/fa';
 import axios from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { signInWithPopup } from 'firebase/auth';
-import { auth, provider } from '../firebase';
+import { auth, provider, db } from '../firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import PdfPreview from '../components/PdfPreview';
 import ResumeEditor from '../components/ResumeEditor';
 
@@ -30,6 +31,33 @@ function ResumeBuilderPage({ user }) {
     const [currentFactIndex, setCurrentFactIndex] = useState(0);
 
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const resumeId = searchParams.get('resumeId');
+
+    // Fetch Saved Resume if ID present
+    useEffect(() => {
+        if (!user || !resumeId) return;
+
+        const fetchResume = async () => {
+            try {
+                const docRef = doc(db, `users/${user.uid}/resumes`, resumeId);
+                const docSnap = await getDoc(docRef);
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    // We inject docId and ensure jobDetails are present if saved
+                    setTailoredData({ ...data, docId: docSnap.id });
+                    setStep(3);
+                } else {
+                    setErrorMsg("Resume not found.");
+                }
+            } catch (err) {
+                console.error("Error fetching resume:", err);
+                setErrorMsg("Failed to load resume.");
+            }
+        };
+
+        fetchResume();
+    }, [user, resumeId]);
 
     useEffect(() => {
         let interval;

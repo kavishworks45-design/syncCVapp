@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaCheck, FaTimes, FaEnvelope, FaGlobe, FaMagic, FaExclamationCircle, FaPen, FaArrowDown, FaPalette, FaGoogle, FaLock, FaFileAlt, FaLinkedin, FaCopy } from "react-icons/fa";
+import { FaCheck, FaTimes, FaEnvelope, FaGlobe, FaMagic, FaExclamationCircle, FaPen, FaArrowDown, FaPalette, FaGoogle, FaLock, FaFileAlt, FaLinkedin, FaCopy, FaSave } from "react-icons/fa";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import axios from 'axios';
 import { signInWithPopup } from "firebase/auth";
-import { auth, provider } from "../firebase";
+import { auth, provider, db } from "../firebase"; // Added db import
+import { collection, addDoc, updateDoc, doc, serverTimestamp } from "firebase/firestore"; // Added Firestore imports
 
 // ... (keep template config as is) ...
 const TEMPLATES = {
@@ -33,6 +34,11 @@ function ResumeEditor({ data, file, onBack, user }) {
   const [showCritiqueModal, setShowCritiqueModal] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
+  // Save State
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedDocId, setSavedDocId] = useState(data.id || null); // support editing existing
+  const [saveStatus, setSaveStatus] = useState(null); // 'saved', 'error'
+
   // Cover Letter State
   const [showCoverLetterModal, setShowCoverLetterModal] = useState(false);
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
@@ -53,6 +59,11 @@ function ResumeEditor({ data, file, onBack, user }) {
       const actualNewSkills = data.analysis.addedSkills.filter(s => data.skills?.includes(s));
       setPendingSkills(actualNewSkills);
     }
+
+    // If opening an existing saved resume, set ID
+    if (data.docId) {
+      setSavedDocId(data.docId);
+    }
   }, [data]);
 
   const handleAuthAction = async (action) => {
@@ -67,10 +78,54 @@ function ResumeEditor({ data, file, onBack, user }) {
     try {
       await signInWithPopup(auth, provider);
       setShowLoginModal(false);
-      // Optional: Auto-trigger download if that was the intent, but clicking again is fine for now
     } catch (error) {
       console.error("Login failed", error);
       alert("Login failed. Please try again.");
+    }
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      setShowLoginModal(true);
+      return;
+    }
+
+    setIsSaving(true);
+    setSaveStatus(null);
+    try {
+      const resumePayload = {
+        ...resumeData,
+        template: activeTemplate,
+        updatedAt: serverTimestamp(),
+        // Ensure we save job details if present for context
+        jobDetails: data.jobDetails || null
+      };
+
+      if (savedDocId) {
+        // Update existing
+        await updateDoc(doc(db, `users/${user.uid}/resumes`, savedDocId), resumePayload);
+      } else {
+        // Create New
+        // Generate a default title
+        const title = resumeData.jobDetails?.company
+          ? `Resume for ${resumeData.jobDetails.company}`
+          : `Tailored Resume ${new Date().toLocaleDateString()}`;
+
+        const docRef = await addDoc(collection(db, `users/${user.uid}/resumes`), {
+          ...resumePayload,
+          title: title,
+          createdAt: serverTimestamp()
+        });
+        setSavedDocId(docRef.id);
+      }
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (error) {
+      console.error("Error saving resume:", error);
+      setSaveStatus('error');
+      alert("Failed to save resume.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -84,11 +139,16 @@ function ResumeEditor({ data, file, onBack, user }) {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
       pdf.save("Tailored_Resume.pdf");
+
+      // Auto-save on download if not saved
+      if (!savedDocId) handleSave();
     });
   };
 
   const handleGenerateCoverLetter = async () => {
     if (!file) {
+      // If we don't have the file (e.g. loaded from save), we might need another way.
+      // For now, alert if missing.
       alert("Original file is missing. Cannot generate cover letter.");
       return;
     }
@@ -98,24 +158,6 @@ function ResumeEditor({ data, file, onBack, user }) {
 
     const formData = new FormData();
     formData.append('resume', file);
-    // Pass the job description text if we have it, although backend logic handles extraction again if needed.
-    // Ideally we pass the already extracted text to save scraping, but backend endpoints are separate.
-    // For now, let's assume the backend re-extracts or we pass a dummy 'jobText' if we had it.
-    // Actually, backend /api/cover-letter implementation scrapes URL again if no jobText.
-    // We don't have jobUrl/jobText in props here easily unless included in `data`.
-    // Let's assume we need to pass job details too. 
-    // *Simplified improvement*: Pass job details in `data` from BuilderPage.
-    // Fallback: If backend fails, we show error. 
-    // Ideally, we'd update ResumeBuilderPage to pass job details. 
-    // For this specific 'Quick Win', let's assume the backend can handle it or we update backend to be smarter.
-    // Wait, `ResumeBuilderPage` called `/api/tailor` with `jobText` or `jobUrl`.
-    // It hasn't passed those to `ResumeEditor`. We should fix that in ResumeBuilderPage first.
-    // BUT, for now, let's just use what we have. If we lack job details, this might fail.
-    // HACK: We will ask the user to input job text again if needed? No, too much friction.
-
-    // BETTER: We will assume ResumeBuilderPage passes `jobContext` (text or url) in `data` or a new prop.
-    // Let's proceed assuming `file` is enough if the backend extracts from resume? No, cover letter needs Job.
-    // We will fix ResumeBuilderPage to pass `jobDetails` prop.
     if (data.jobDetails) {
       if (data.jobDetails.text) formData.append('jobText', data.jobDetails.text);
       if (data.jobDetails.url) formData.append('jobUrl', data.jobDetails.url);
@@ -439,14 +481,38 @@ function ResumeEditor({ data, file, onBack, user }) {
           <FaTimes /> Cancel
         </button>
 
-        {/* CENTER: AI TOOLS */}
+        {/* CENTER: AI TOOLS & SAVE */}
         <div style={{ display: "flex", gap: "10px" }}>
           <button
             className="modern-btn modern-btn-secondary"
             onClick={handleGenerateCoverLetter}
             style={{ height: "44px", fontSize: "0.9rem", display: "flex", gap: "8px", alignItems: "center", background: "#eff6ff", color: "#2563eb", borderColor: "#bfdbfe" }}
+            title={!file ? "Original file needed" : "Draft a cover letter"}
           >
-            <FaFileAlt /> Write Cover Letter
+            <FaFileAlt /> Cover Letter
+          </button>
+
+          <button
+            className="modern-btn modern-btn-secondary"
+            onClick={handleSave}
+            disabled={isSaving}
+            style={{
+              height: "44px",
+              fontSize: "0.9rem",
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              background: saveStatus === 'saved' ? "#dcfce7" : "#f1f5f9",
+              color: saveStatus === 'saved' ? "#166534" : "#475569",
+              borderColor: saveStatus === 'saved' ? "#bbf7d0" : "#e2e8f0"
+            }}
+          >
+            {isSaving ? (
+              <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 1 }} style={{ width: 14, height: 14, border: "2px solid currentColor", borderRadius: "50%", borderTopColor: "transparent" }} />
+            ) : (
+              saveStatus === 'saved' ? <FaCheck /> : <FaSave />
+            )}
+            {saveStatus === 'saved' ? "Saved" : "Save"}
           </button>
         </div>
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from "framer-motion";
-import { FaPlus, FaBriefcase, FaArrowRight, FaMagic, FaChartLine, FaCheckCircle, FaClock, FaCommentDots, FaFire, FaExclamationTriangle } from "react-icons/fa";
+import { FaPlus, FaBriefcase, FaArrowRight, FaMagic, FaChartLine, FaCheckCircle, FaClock, FaCommentDots, FaFire, FaExclamationTriangle, FaFileAlt, FaEdit } from "react-icons/fa";
 import { useNavigate } from 'react-router-dom';
 import { db } from '../firebase';
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
@@ -8,24 +8,40 @@ import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 function Dashboard({ user, onNewResume }) {
     const navigate = useNavigate();
     const [jobs, setJobs] = useState([]);
+    const [resumes, setResumes] = useState([]);
     const [loading, setLoading] = useState(true);
 
-    // Fetch Jobs Data
+    // Fetch Jobs & Resumes Data
     useEffect(() => {
         if (!user) return;
 
-        const q = query(
+        // Jobs Query
+        const qJobs = query(
             collection(db, `users/${user.uid}/jobs`),
             orderBy('updatedAt', 'desc')
         );
 
-        const unsubscribe = onSnapshot(q, (snapshot) => {
+        // Resumes Query
+        const qResumes = query(
+            collection(db, `users/${user.uid}/resumes`),
+            orderBy('updatedAt', 'desc')
+        );
+
+        const unsubJobs = onSnapshot(qJobs, (snapshot) => {
             const jobsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setJobs(jobsData);
+        });
+
+        const unsubResumes = onSnapshot(qResumes, (snapshot) => {
+            const resumesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setResumes(resumesData);
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubJobs();
+            unsubResumes();
+        };
     }, [user]);
 
     // Derived Stats
@@ -232,6 +248,53 @@ function Dashboard({ user, onNewResume }) {
                         </div>
                     </motion.div>
                 </div>
+
+                {/* SAVED RESUMES SECTION */}
+                <motion.div variants={item} style={{ marginBottom: "24px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+                        <h3 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>My Resumes</h3>
+                        <div style={{ background: "#e0f2fe", padding: "4px 10px", borderRadius: "100px", color: "#0284c7", fontSize: "0.8rem", fontWeight: 700 }}>
+                            {resumes.length}
+                        </div>
+                    </div>
+
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: "20px" }}>
+                        {resumes.map(resume => (
+                            <motion.div
+                                key={resume.id}
+                                onClick={() => navigate(`/builder?resumeId=${resume.id}`)}
+                                whileHover={{ y: -4, boxShadow: "0 10px 30px rgba(0,0,0,0.08)" }}
+                                style={{
+                                    background: "white", borderRadius: "20px", padding: "24px",
+                                    border: "1px solid rgba(0,0,0,0.06)", cursor: "pointer",
+                                    position: "relative", overflow: "hidden"
+                                }}
+                            >
+                                <div style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "16px" }}>
+                                    <div style={{ padding: "12px", background: "#f0fdf4", color: "#16a34a", borderRadius: "12px" }}>
+                                        <FaFileAlt size={20} />
+                                    </div>
+                                    <div>
+                                        <h4 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#1e293b" }}>{resume.title || "Untitled Resume"}</h4>
+                                        <p style={{ margin: "4px 0 0 0", fontSize: "0.85rem", color: "#64748b" }}>
+                                            Edited {resume.updatedAt?.seconds ? new Date(resume.updatedAt.seconds * 1000).toLocaleDateString() : 'Just now'}
+                                        </p>
+                                    </div>
+                                </div>
+                                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                                    <button style={{ background: "transparent", border: "none", color: "#3b82f6", fontWeight: 600, fontSize: "0.9rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                                        Open Editor <FaEdit />
+                                    </button>
+                                </div>
+                            </motion.div>
+                        ))}
+                        {resumes.length === 0 && !loading && (
+                            <div style={{ padding: "40px", border: "2px dashed #e2e8f0", borderRadius: "20px", color: "#94a3b8", textAlign: "center" }}>
+                                No saved resumes yet. Save one after generating!
+                            </div>
+                        )}
+                    </div>
+                </motion.div>
 
                 {/* INSIGHTS GRID - Real Data */}
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "24px" }} className="responsive-grid-split">
