@@ -1,0 +1,11 @@
+{
+    "name": "resume-maker-root",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "deploy": "vercel"
+    },
+    "devDependencies": {
+        "vercel": "^50.1.3"
+    }
+}
