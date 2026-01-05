@@ -117,7 +117,7 @@ function Dashboard({ user }) {
             <Sidebar user={user} active="overview" />
 
             {/* === MAIN SCROLLABLE DASHBOARD === */}
-            <div className="dashboard-main" style={{ flex: 1, padding: "32px 48px", overflowY: "auto", position: "relative", zIndex: 1, height: "100vh" }}>
+            <div className="dashboard-main dashboard-wrapper" style={{ flex: 1, padding: "32px 48px", overflowY: "auto", position: "relative", zIndex: 1, height: "100vh" }}>
                 <div style={{ maxWidth: "1400px", margin: "0 auto", paddingBottom: "40px" }}>
 
                     {/* 1. GREETING & HEADER */}
@@ -140,7 +140,7 @@ function Dashboard({ user }) {
                     </div>
 
                     {/* 2. TOP METRICS */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "24px", marginBottom: "48px" }}>
+                    <div className="dashboard-stats-grid">
 
                         {/* STAT 1: Applications */}
                         <motion.div whileHover={{ y: -5 }} style={{ ...SOLID_CARD, padding: "32px", display: "flex", flexDirection: "column", justifyContent: "space-between", position: "relative", overflow: "hidden", minHeight: "200px" }}>
@@ -198,7 +198,7 @@ function Dashboard({ user }) {
                     </div>
 
                     {/* 3. WORKSPACE SPLIT */}
-                    <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "32px" }}>
+                    <div className="dashboard-split">
 
                         {/* LEFT: Documents */}
                         <div>

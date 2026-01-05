@@ -260,6 +260,20 @@ body {
 
 /* --- RESPONSIVE LAYOUT HELPERS --- */
 
+/* Dashboard Grid Defaults */
+.dashboard-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+.dashboard-split {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 32px;
+}
+
 .mobile-visible {
   display: none;
 }
@@ -299,6 +313,16 @@ body {
   .hero-title {
     font-size: 2.5rem !important;
   }
+
+  .dashboard-wrapper {
+    padding: 20px !important;
+  }
+
+  .dashboard-stats-grid,
+  .dashboard-split {
+    grid-template-columns: 1fr !important;
+  }
+
 
   .modern-card {
     padding: 24px !important;
