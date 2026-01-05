@@ -177,16 +177,9 @@ function LandingPage({ onStart, isLoggedIn, onLogin }) {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(3, 1fr)",
-                    gridAutoRows: "minmax(250px, auto)",
-                    gap: "24px",
-                    width: "100%",
-                    maxWidth: "1100px",
-                    margin: "0 auto",
-                    position: "relative",
-                    zIndex: 2
+                    // display: "grid", moved to css
                 }}
+                className="bento-grid"
             >
                 {/* 1. UPLOAD (Tall Card Left) */}
                 <ParallaxCard style={{ gridColumn: "span 1", gridRow: "span 2" }}>

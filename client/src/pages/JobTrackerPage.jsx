@@ -676,6 +676,8 @@ function JobTrackerPage({ user }) {
                     )}
                 </AnimatePresence>
 
+                <div className="mobile-nav-spacer"></div>
+
                 {/* Custom Scrollbars */}
                 <style>{`
                 ::-webkit-scrollbar { height: 8px; width: 8px; }

@@ -164,6 +164,7 @@ function SettingsPage({ user }) {
                         </motion.div>
                     )}
                 </AnimatePresence>
+                <div className="mobile-nav-spacer"></div>
             </div>
         </div>
     );

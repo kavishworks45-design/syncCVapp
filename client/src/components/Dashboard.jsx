@@ -316,6 +316,8 @@ function Dashboard({ user }) {
                 </div>
             </div>
 
+            <div className="mobile-nav-spacer"></div>
+
             <style>{`
                 .dashboard-main::-webkit-scrollbar { width: 8px; }
                 .dashboard-main::-webkit-scrollbar-track { background: transparent; }

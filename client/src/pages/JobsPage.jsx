@@ -176,6 +176,7 @@ function JobsPage({ user }) {
                         )}
                     </AnimatePresence>
                 </div>
+                <div className="mobile-nav-spacer"></div>
             </div>
         </div >
     );

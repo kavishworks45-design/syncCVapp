@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { FaCheck, FaTimes, FaEnvelope, FaGlobe, FaMagic, FaExclamationCircle, FaPen, FaArrowDown, FaPalette, FaGoogle, FaLock, FaFileAlt, FaLinkedin, FaCopy, FaSave, FaCrown, FaGem } from "react-icons/fa";
+import { FaCheck, FaTimes, FaEnvelope, FaGlobe, FaMagic, FaExclamationCircle, FaPen, FaArrowDown, FaPalette, FaGoogle, FaLock, FaFileAlt, FaLinkedin, FaCopy, FaSave, FaCrown, FaGem, FaEye } from "react-icons/fa";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import axios from 'axios';
@@ -46,6 +46,9 @@ function ResumeEditor({ data, file, onBack, user, matchScore = 0 }) {
   const [activeTemplate, setActiveTemplate] = useState("classic");
   const [showCritiqueModal, setShowCritiqueModal] = useState(true);
   const [showLoginModal, setShowLoginModal] = useState(false);
+
+  // Mobile Support: Default true (Show Resume)
+  const [mobilePreviewMode, setMobilePreviewMode] = useState(true);
 
   const navigate = useNavigate();
   // Save State
@@ -266,6 +269,8 @@ function ResumeEditor({ data, file, onBack, user, matchScore = 0 }) {
       })}
     </div>
   );
+
+
 
   return (
     <div className="resume-editor-shell" style={{ position: "fixed", top: 0, left: 0, zIndex: 2000, display: "flex", width: "100vw", height: "100vh", overflow: "hidden", background: "#f3f4f6" }}>
@@ -639,7 +644,7 @@ function ResumeEditor({ data, file, onBack, user, matchScore = 0 }) {
       </AnimatePresence>
 
       {/* === LEFT SIDEBAR === */}
-      <div className="editor-sidebar" style={{ width: "320px", background: "white", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", padding: "24px", gap: "24px", zIndex: 50, boxShadow: "4px 0 24px rgba(0,0,0,0.02)" }}>
+      <div className={"editor-sidebar " + (mobilePreviewMode ? "mobile-hidden" : "")} style={{ width: "320px", background: "white", borderRight: "1px solid #e5e7eb", display: "flex", flexDirection: "column", padding: "24px", gap: "24px", zIndex: 50, boxShadow: "4px 0 24px rgba(0,0,0,0.02)" }}>
 
         {/* Header */}
         <div style={{ paddingBottom: "20px", borderBottom: "1px solid #f3f4f6" }}>
@@ -726,7 +731,7 @@ function ResumeEditor({ data, file, onBack, user, matchScore = 0 }) {
       </div>
 
       {/* === MAIN PREVIEW AREA === */}
-      <div className="editor-main" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px" }}>
+      <div className={"editor-main " + (!mobilePreviewMode ? "mobile-hidden" : "")} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px" }}>
         {/* Zoom/Toolbar Hint (Optional) */}
         <div style={{ marginBottom: "20px", color: "#94a3b8", fontSize: "0.85rem", display: "flex", gap: "20px" }}>
           <span><FaPen size={12} /> Click text to edit</span>
@@ -1056,6 +1061,22 @@ function ResumeEditor({ data, file, onBack, user, matchScore = 0 }) {
 
         </div>
 
+      </div>
+
+      {/* MOBILE TOGGLE BUTTON */}
+      <div
+        className="mobile-visible"
+        onClick={() => setMobilePreviewMode(!mobilePreviewMode)}
+        style={{
+          position: "fixed", bottom: "96px", right: "24px",
+          width: "56px", height: "56px",
+          background: "#3b82f6", borderRadius: "50%",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          color: "white", boxShadow: "0 10px 25px rgba(0,0,0,0.3)",
+          zIndex: 10005, cursor: "pointer"
+        }}
+      >
+        {mobilePreviewMode ? <FaPalette size={22} /> : <FaFileAlt size={22} />}
       </div>
 
     </div>
