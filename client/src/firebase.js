@@ -14,12 +14,17 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);
+const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 // Export Auth services
 export const auth = getAuth(app);
 export const provider = new GoogleAuthProvider();
 
 // Initialize Firestore
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, enableIndexedDbPersistence } from "firebase/firestore";
 export const db = getFirestore(app);
+
+// Enable Offline Persistence
+enableIndexedDbPersistence(db).catch((err) => {
+    console.log("Persistence disabled:", err.code);
+});

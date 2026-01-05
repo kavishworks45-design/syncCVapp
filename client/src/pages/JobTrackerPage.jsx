@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaPlus, FaTrash, FaExternalLinkAlt, FaSearch, FaBriefcase, FaCalendarAlt, FaCheckCircle, FaClock, FaTimesCircle, FaCommentAlt, FaChevronRight } from 'react-icons/fa';
+import { FaPlus, FaTrash, FaExternalLinkAlt, FaSearch, FaBriefcase, FaCalendarAlt, FaCheckCircle, FaClock, FaTimesCircle, FaCommentAlt, FaChevronRight, FaStickyNote, FaMagic, FaCopy } from 'react-icons/fa';
 import { db } from '../firebase';
 import { collection, query, onSnapshot, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, orderBy } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import Sidebar from '../components/Sidebar';
+import axios from 'axios';
 
 // --- CONFIGURATION ---
 const STATUS_CONFIG = {
@@ -52,7 +54,50 @@ function JobTrackerPage({ user }) {
     const [draggedJobId, setDraggedJobId] = useState(null);
     const [dragOverColumn, setDragOverColumn] = useState(null);
     const [newJob, setNewJob] = useState({ company: '', role: '', url: '', status: 'saved' });
+    const [selectedJob, setSelectedJob] = useState(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [generatingCoverLetter, setGeneratingCoverLetter] = useState(false);
+    const [coverLetterData, setCoverLetterData] = useState(null);
+    const [isCoverLetterModalOpen, setIsCoverLetterModalOpen] = useState(false);
+    const [isFollowUpModalOpen, setIsFollowUpModalOpen] = useState(false);
+    const [followUpText, setFollowUpText] = useState("");
+
+    // Auto-save debounce could be added, but simple save on change/blur is safer for now.
+    const handleUpdateJob = async (jobId, data) => {
+        try {
+            await updateDoc(doc(db, `users/${user.uid}/jobs`, jobId), { ...data, updatedAt: serverTimestamp() });
+            // Update local state immediately for responsiveness (Snapshot listener matches eventually but this is faster for UI)
+            setJobs(prev => prev.map(j => j.id === jobId ? { ...j, ...data } : j));
+            if (selectedJob && selectedJob.id === jobId) setSelectedJob(prev => ({ ...prev, ...data }));
+        } catch (e) {
+            console.error("Update failed", e);
+        }
+    };
+
+    const generateEmail = () => {
+        if (!selectedJob) return;
+        const subject = `Follow up: ${selectedJob.role} application`;
+        const body = `Hi [Recruiter Name],\n\nI hope you're having a great week.\n\nI wanted to follow up on my application for the ${selectedJob.role} position at ${selectedJob.company}. I remain very interested in the opportunity and would love to discuss how my skills align with your team's needs.\n\nPlease let me know if you need any further information.\n\nBest,\n${user.displayName}`;
+
+        setFollowUpText(`Subject: ${subject}\n\n${body}`);
+        setIsFollowUpModalOpen(true);
+    };
+
+    const handleCopyFollowUp = () => {
+        navigator.clipboard.writeText(followUpText);
+        alert("Copied to clipboard!"); // Could be replaced with a toast notification
+        setIsFollowUpModalOpen(false);
+    };
+
+    const handleGenerateCoverLetter = () => {
+        if (!selectedJob) return;
+        setIsCoverLetterModalOpen(true);
+    };
+
+    const confirmRedirectToBuilder = () => {
+        setIsCoverLetterModalOpen(false);
+        navigate(`/builder?jobCompany=${encodeURIComponent(selectedJob.company)}&jobRole=${encodeURIComponent(selectedJob.role)}&jobUrl=${encodeURIComponent(selectedJob.url || '')}&jobContext=${encodeURIComponent(selectedJob.notes || '')}`);
+    };
 
     useEffect(() => {
         if (!user) { setLoading(false); return; }
@@ -118,245 +163,529 @@ function JobTrackerPage({ user }) {
     const itemVariants = { hidden: { opacity: 0, y: 10 }, show: { opacity: 1, y: 0 } };
 
     return (
-        <div style={{ maxWidth: "1600px", margin: "0 auto", paddingBottom: "4rem", minHeight: "90vh", fontFamily: "-apple-system, BlinkMacSystemFont, 'Inter', sans-serif" }}>
+        <div style={{ display: "flex", width: "100%", minHeight: "100vh", background: "#f8fafc", fontFamily: "'Inter', sans-serif" }}>
+            <Sidebar user={user} active="tracker" />
 
-            {/* HEADER SECTION (Matching Dashboard) */}
-            <div style={{ padding: "2rem 2rem 1rem", display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "1rem" }}>
-                <div>
-                    <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#86868b", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em" }}>Workspace</div>
-                    <h1 style={{ fontSize: "2.5rem", fontWeight: 800, margin: 0, color: "#1d1d1f", letterSpacing: "-0.02em" }}>
-                        Application Tracker
-                    </h1>
-                </div>
+            <div style={{ flex: 1, height: "100vh", overflowY: "auto", padding: "40px 20px" }}>
 
-                <div style={{ display: "flex", gap: "16px" }}>
+                {/* HEADER SECTION (Matching Dashboard) */}
+                <div style={{ maxWidth: "1600px", margin: "0 auto", padding: "0 10px 10px", display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "30px" }}>
+                    <div>
+                        {/* Consistent Breadcrumb/Label */}
+                        <div style={{ fontSize: "0.85rem", fontWeight: 600, color: "#86868b", marginBottom: "4px", textTransform: "uppercase", letterSpacing: "0.05em", display: "flex", alignItems: "center", gap: "8px" }}>
+                            <span style={{ width: 8, height: 8, background: "#f59e0b", borderRadius: "50%" }}></span> WORKSPACE
+                        </div>
+                        <h1 style={{ fontSize: "2.2rem", fontWeight: 800, margin: 0, color: "#1d1d1f", letterSpacing: "-0.02em" }}>
+                            Application Tracker
+                        </h1>
+                    </div>
 
-
-                    <button
-                        onClick={() => setIsAdding(true)}
-                        style={{
-                            background: "#1d1d1f", color: "white", border: "none", padding: "0 24px", height: "46px",
-                            borderRadius: "100px", fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
-                            display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
-                        }}
-                    >
-                        <FaPlus size={10} /> Add Application
-                    </button>
-                </div>
-            </div>
-
-            {/* BOARD AREA */}
-            <motion.div
-                variants={containerVariants} initial="hidden" animate="show"
-                style={{ overflowX: "auto", padding: "0 2rem 2rem", display: "flex", gap: "32px", paddingBottom: "40px", height: "calc(100vh - 180px)" }}
-            >
-                {COLUMNS.map((col, index) => {
-                    const colJobs = jobs.filter(j => j.status === col.id);
-                    const isDragOver = dragOverColumn === col.id;
-                    const Icon = col.icon;
-
-                    return (
-                        <div
-                            key={col.id}
-                            onDragOver={(e) => onDragOver(e, col.id)}
-                            onDrop={(e) => onDrop(e, col.id)}
+                    <div style={{ display: "flex", gap: "16px" }}>
+                        <button
+                            onClick={() => setIsAdding(true)}
                             style={{
-                                flex: "0 0 340px", display: "flex", flexDirection: "column",
-                                background: isDragOver ? `${col.bg}90` : "transparent",
-                                borderRadius: "24px", padding: "12px", transition: "background 0.2s"
+                                background: "#1d1d1f", color: "white", border: "none", padding: "0 24px", height: "46px",
+                                borderRadius: "100px", fontSize: "0.95rem", fontWeight: 600, cursor: "pointer",
+                                display: "flex", alignItems: "center", gap: "8px", boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
                             }}
                         >
-                            {/* Column Header */}
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", padding: "0 8px", position: "relative" }}>
-                                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "1rem", fontWeight: 700, color: "#1d1d1f" }}>
-                                    <div style={{ padding: "6px", background: col.bg, borderRadius: "8px", color: col.color, display: "flex" }}>
-                                        <Icon size={12} />
-                                    </div>
-                                    {col.label}
-                                </div>
-                                <div style={{ background: "rgba(0,0,0,0.04)", padding: "2px 10px", borderRadius: "100px", fontSize: "0.8rem", fontWeight: 600, color: "#64748b" }}>
-                                    {colJobs.length}
-                                </div>
+                            <FaPlus size={10} /> Add Application
+                        </button>
+                    </div>
+                </div>
 
-                                {/* Flow Arrow */}
-                                {index < COLUMNS.length - 1 && (
-                                    <div style={{ position: "absolute", right: "-32px", top: "50%", transform: "translateY(-50%)", color: "#d1d5db", fontSize: "1.2rem", pointerEvents: "none" }}>
-                                        <FaChevronRight />
+                <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+                    {/* BOARD AREA */}
+                    <motion.div
+                        variants={containerVariants} initial="hidden" animate="show"
+                        style={{ flex: 1, display: "flex", flexWrap: "wrap", gap: "24px", paddingBottom: "40px", alignItems: "flex-start", justifyContent: "flex-start" }}
+                    >
+                        {COLUMNS.map((col, index) => {
+                            const colJobs = jobs.filter(j => j.status === col.id);
+                            const isDragOver = dragOverColumn === col.id;
+                            const Icon = col.icon;
+                            /* ... (existing column mapping logic logic) ... */
+                            /* I need to inline the mapping logic here or reference it if I could, but replace_file_content replaces the block. */
+                            /* Since the block is large, I will construct the Panel separately? No, I must replace the whole block or the structure changes. */
+                            return (
+                                <div
+                                    key={col.id}
+                                    onDragOver={(e) => onDragOver(e, col.id)}
+                                    onDrop={(e) => onDrop(e, col.id)}
+                                    style={{
+                                        flex: "1 1 300px", maxWidth: "340px", minWidth: "280px", display: "flex", flexDirection: "column",
+                                        background: isDragOver ? `${col.bg}90` : "transparent",
+                                        borderRadius: "24px", padding: "12px", transition: "background 0.2s"
+                                    }}
+                                >
+                                    {/* Column Header */}
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", padding: "0 8px", position: "relative" }}>
+                                        <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "1rem", fontWeight: 700, color: "#1d1d1f" }}>
+                                            <div style={{ padding: "6px", background: col.bg, borderRadius: "8px", color: col.color, display: "flex" }}>
+                                                <Icon size={12} />
+                                            </div>
+                                            {col.label}
+                                        </div>
+                                        <div style={{ background: "rgba(0,0,0,0.04)", padding: "2px 10px", borderRadius: "100px", fontSize: "0.8rem", fontWeight: 600, color: "#64748b" }}>
+                                            {colJobs.length}
+                                        </div>
                                     </div>
-                                )}
-                            </div>
 
-                            {/* Cards Container */}
-                            <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px", padding: "4px" }}>
-                                <AnimatePresence>
-                                    {colJobs.map(job => (
-                                        <motion.div
-                                            key={job.id}
-                                            layoutId={job.id}
-                                            draggable
-                                            onDragStart={(e) => onDragStart(e, job.id)}
-                                            initial={{ opacity: 0, y: 10 }}
-                                            animate={{ opacity: 1, y: 0 }}
-                                            exit={{ opacity: 0, scale: 0.95 }}
-                                            whileHover={{ y: -4, boxShadow: "0 12px 24px -10px rgba(0,0,0,0.12)" }}
-                                            transition={{ type: "spring", stiffness: 400, damping: 25 }}
-                                            style={{
-                                                background: "white", borderRadius: "20px",
-                                                padding: "20px", cursor: "grab", position: "relative",
-                                                border: "1px solid rgba(0,0,0,0.04)",
-                                                boxShadow: "0 4px 6px -2px rgba(0,0,0,0.02), 0 10px 15px -3px rgba(0,0,0,0.02)"
-                                            }}
-                                        >
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
-                                                <div style={{ display: "flex", gap: "14px" }}>
-                                                    <CompanyLogo name={job.company} />
-                                                    <div>
-                                                        <h4 style={{ margin: "0 0 4px 0", fontSize: "1.05rem", fontWeight: 700, color: "#1d1d1f" }}>
-                                                            {job.role}
-                                                        </h4>
-                                                        <div style={{ fontSize: "0.9rem", color: "#86868b" }}>
-                                                            {job.company}
+                                    {/* Cards Container */}
+                                    <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: "16px", padding: "4px" }}>
+                                        <AnimatePresence>
+                                            {colJobs.map(job => (
+                                                <motion.div
+                                                    key={job.id}
+                                                    layoutId={job.id}
+                                                    draggable
+                                                    onDragStart={(e) => onDragStart(e, job.id)}
+                                                    initial={{ opacity: 0, y: 10 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, scale: 0.95 }}
+                                                    whileHover={{ y: -4, boxShadow: "0 12px 24px -10px rgba(0,0,0,0.12)" }}
+                                                    transition={{ type: "spring", stiffness: 400, damping: 25 }}
+                                                    style={{
+                                                        background: "white", borderRadius: "20px",
+                                                        padding: "20px", cursor: "pointer", position: "relative",
+                                                        border: "1px solid rgba(0,0,0,0.04)",
+                                                        boxShadow: "0 4px 6px -2px rgba(0,0,0,0.02), 0 10px 15px -3px rgba(0,0,0,0.02)"
+                                                    }}
+                                                    onClick={() => setSelectedJob(job)}
+                                                >
+                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+                                                        <div style={{ display: "flex", gap: "14px", overflow: "hidden" }}>
+                                                            <CompanyLogo name={job.company} />
+                                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                                <h4 style={{ margin: "0 0 4px 0", fontSize: "1.05rem", fontWeight: 700, color: "#1d1d1f", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                                    {job.role}
+                                                                </h4>
+                                                                <div style={{ fontSize: "0.9rem", color: "#86868b", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                                                    {job.company}
+                                                                </div>
+                                                            </div>
                                                         </div>
                                                     </div>
-                                                </div>
-                                            </div>
 
-                                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "16px", borderTop: "1px solid #f9fafb" }}>
-                                                <div style={{ fontSize: "0.8rem", fontWeight: 500, color: "#9ca3af", display: "flex", alignItems: "center", gap: "6px" }}>
-                                                    <FaCalendarAlt size={12} />
-                                                    {job.updatedAt?.seconds
-                                                        ? new Date(job.updatedAt.seconds * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                                                        : new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-                                                    }
-                                                </div>
+                                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "16px", borderTop: "1px solid #f9fafb" }}>
+                                                        <div style={{ fontSize: "0.8rem", fontWeight: 500, color: "#9ca3af", display: "flex", alignItems: "center", gap: "6px" }}>
+                                                            <FaCalendarAlt size={12} />
+                                                            {job.updatedAt?.seconds
+                                                                ? new Date(job.updatedAt.seconds * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                                                                : new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                                                            }
+                                                        </div>
 
-                                                <div style={{ display: "flex", gap: "10px" }}>
-                                                    {job.url && (
-                                                        <a href={job.url} target="_blank" rel="noreferrer" style={{ color: "#d1d5db", transition: "color 0.2s" }} onMouseOver={e => e.target.style.color = "#3b82f6"}>
-                                                            <FaExternalLinkAlt size={14} />
-                                                        </a>
-                                                    )}
-                                                    <button onClick={(e) => handleDelete(job.id, e)} style={{ border: "none", background: "none", color: "#d1d5db", cursor: "pointer", padding: 0 }} onMouseOver={e => e.currentTarget.style.color = "#ef4444"}>
-                                                        <FaTrash size={14} />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </AnimatePresence>
-
-                                {colJobs.length === 0 && (
-                                    <div style={{
-                                        padding: "40px", textAlign: "center", border: "2px dashed #f3f4f6", borderRadius: "20px",
-                                        color: "#d1d5db", fontSize: "0.9rem", display: "flex", flexDirection: "column", gap: "12px", alignItems: "center"
-                                    }}>
-                                        <div style={{ fontSize: "1.5rem", opacity: 0.4 }}>+</div>
-                                        <div style={{ fontWeight: 500 }}>Drag Applications Here</div>
+                                                        <div style={{ display: "flex", gap: "10px" }}>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); setSelectedJob(job); }}
+                                                                style={{ border: "none", background: "none", color: job.notes ? "#f59e0b" : "#94a3b8", cursor: "pointer", padding: 0, display: "flex", alignItems: "center", gap: "6px" }}
+                                                                title="Add Note"
+                                                                onMouseOver={e => e.currentTarget.style.color = "#f59e0b"}
+                                                                onMouseOut={e => e.currentTarget.style.color = job.notes ? "#f59e0b" : "#94a3b8"}
+                                                            >
+                                                                <FaStickyNote size={12} />
+                                                                <span style={{ fontSize: "0.8rem", fontWeight: "600" }}>Add Note</span>
+                                                            </button>
+                                                            {job.url && (
+                                                                <a href={job.url} target="_blank" rel="noreferrer" style={{ color: "#d1d5db", transition: "color 0.2s" }} onMouseOver={e => e.target.style.color = "#3b82f6"}>
+                                                                    <FaExternalLinkAlt size={14} />
+                                                                </a>
+                                                            )}
+                                                            <button onClick={(e) => handleDelete(job.id, e)} style={{ border: "none", background: "none", color: "#d1d5db", cursor: "pointer", padding: 0 }} onMouseOver={e => e.currentTarget.style.color = "#ef4444"}>
+                                                                <FaTrash size={14} />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </motion.div>
+                                            ))}
+                                        </AnimatePresence>
+                                        {colJobs.length === 0 && ( /* Empty State */
+                                            <div style={{ padding: "30px 20px", textAlign: "center", border: "2px dashed #f3f4f6", borderRadius: "20px", color: "#d1d5db", fontSize: "0.9rem" }}>Drag Here</div>
+                                        )}
                                     </div>
-                                )}
+                                </div>
+                            );
+                        })}
+                    </motion.div>
+
+                    {/* AI INSIGHTS SIDE PANEL */}
+                    <div style={{ width: "300px", flexShrink: 0, display: "flex", flexDirection: "column", gap: "20px", position: "sticky", top: "20px" }}>
+
+                        {/* Summary Card */}
+                        <div style={{ background: "white", padding: "24px", borderRadius: "24px", border: "1px solid #e2e8f0", boxShadow: "0 4px 20px rgba(0,0,0,0.02)" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px" }}>
+                                <div style={{ width: 32, height: 32, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", borderRadius: "8px", display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}>
+                                    <FaCommentAlt size={14} />
+                                </div>
+                                <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#1e293b" }}>AI Summary</h3>
+                            </div>
+
+                            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                                <div style={{ padding: "12px", background: "#f8fafc", borderRadius: "12px", fontSize: "0.9rem", color: "#475569", lineHeight: 1.5 }}>
+                                    Run Rate: <strong>{jobs.length > 0 ? Math.round((jobs.filter(j => j.status === 'interview').length / jobs.length) * 100) : 0}%</strong> of applications leading to interviews.
+                                </div>
+                                <div style={{ padding: "12px", background: "#f0fdf4", borderRadius: "12px", fontSize: "0.9rem", color: "#166534", lineHeight: 1.5 }}>
+                                    <strong>{jobs.filter(j => j.status === 'offer').length} Offers</strong> received! Great work.
+                                </div>
                             </div>
                         </div>
-                    );
-                })}
-            </motion.div>
 
-            {/* ADD MODAL */}
-            <AnimatePresence>
-                {isAdding && (
-                    <div style={{
-                        position: "fixed", inset: 0, zIndex: 2000,
-                        background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)",
-                        display: "flex", alignItems: "center", justifyContent: "center"
-                    }}>
-                        <motion.div
-                            initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
-                            style={{
-                                width: "480px", background: "white", borderRadius: "32px",
-                                boxShadow: "0 40px 100px -20px rgba(0,0,0,0.15)", overflow: "hidden",
-                                border: "1px solid rgba(0,0,0,0.04)"
-                            }}
-                        >
-                            <div style={{ padding: "40px 40px 24px" }}>
-                                <h2 style={{ margin: "0 0 8px 0", fontSize: "1.8rem", fontWeight: 800, color: "#1d1d1f", letterSpacing: "-0.02em" }}>New Application</h2>
-                                <p style={{ margin: 0, color: "#86868b", fontSize: "1rem" }}>Add a job to your pipeline.</p>
+                        {/* Action Item Card */}
+                        <div style={{ background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)", padding: "24px", borderRadius: "24px", color: "white", position: "relative", overflow: "hidden" }}>
+                            <div style={{ position: "relative", zIndex: 1 }}>
+                                <h4 style={{ margin: "0 0 8px 0", fontSize: "1rem", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>Focus For Today</h4>
+                                <p style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600, lineHeight: 1.4 }}>
+                                    {jobs.filter(j => j.status === 'applied').length > 0 ?
+                                        `Follow up on your application to ${jobs.filter(j => j.status === 'applied')[0].company}.` :
+                                        "Apply to 3 new roles to keep your pipeline full."}
+                                </p>
                             </div>
+                            <div style={{ position: "absolute", bottom: -20, right: -20, opacity: 0.1 }}>
+                                <FaCheckCircle size={100} />
+                            </div>
+                        </div>
 
-                            <form onSubmit={handleAddJob} style={{ padding: "0 40px 40px", display: "flex", flexDirection: "column", gap: "20px" }}>
-                                <input
-                                    autoFocus
-                                    placeholder="Company Name"
-                                    value={newJob.company}
-                                    onChange={e => setNewJob({ ...newJob, company: e.target.value })}
-                                    required
-                                    style={{ width: "100%", padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1.05rem", fontWeight: 500, outline: "none", color: "#1d1d1f" }}
-                                    onFocus={e => e.target.style.background = "white"}
-                                    onBlur={e => e.target.style.background = "#f5f5f7"}
-                                />
-                                <input
-                                    placeholder="Role Title"
-                                    value={newJob.role}
-                                    onChange={e => setNewJob({ ...newJob, role: e.target.value })}
-                                    required
-                                    style={{ width: "100%", padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1.05rem", fontWeight: 500, outline: "none", color: "#1d1d1f" }}
-                                    onFocus={e => e.target.style.background = "white"}
-                                    onBlur={e => e.target.style.background = "#f5f5f7"}
-                                />
-                                <div style={{ display: "flex", gap: "12px" }}>
-                                    <select
-                                        value={newJob.status}
-                                        onChange={e => setNewJob({ ...newJob, status: e.target.value })}
-                                        style={{ flex: 1, padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1rem", outline: "none", cursor: "pointer", color: "#1d1d1f", fontWeight: 500 }}
-                                    >
-                                        {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                                    </select>
+                    </div>
+                </div>
+
+                {/* ADD MODAL */}
+                <AnimatePresence>
+                    {isAdding && (
+                        <div style={{
+                            position: "fixed", inset: 0, zIndex: 2000,
+                            background: "rgba(255,255,255,0.8)", backdropFilter: "blur(20px)",
+                            display: "flex", alignItems: "center", justifyContent: "center"
+                        }}>
+                            <motion.div
+                                initial={{ scale: 0.95, opacity: 0, y: 20 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.95, opacity: 0 }}
+                                style={{
+                                    width: "480px", background: "white", borderRadius: "32px",
+                                    boxShadow: "0 40px 100px -20px rgba(0,0,0,0.15)", overflow: "hidden",
+                                    border: "1px solid rgba(0,0,0,0.04)"
+                                }}
+                            >
+                                <div style={{ padding: "40px 40px 24px" }}>
+                                    <h2 style={{ margin: "0 0 8px 0", fontSize: "1.8rem", fontWeight: 800, color: "#1d1d1f", letterSpacing: "-0.02em" }}>New Application</h2>
+                                    <p style={{ margin: 0, color: "#86868b", fontSize: "1rem" }}>Add a job to your pipeline.</p>
                                 </div>
-                                <input
-                                    placeholder="Job Post URL (Optional)"
-                                    value={newJob.url}
-                                    onChange={e => setNewJob({ ...newJob, url: e.target.value })}
-                                    style={{ width: "100%", padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1.05rem", fontWeight: 500, outline: "none", color: "#1d1d1f" }}
-                                    onFocus={e => e.target.style.background = "white"}
-                                    onBlur={e => e.target.style.background = "#f5f5f7"}
-                                />
 
-                                <div style={{ display: "flex", gap: "16px", marginTop: "16px" }}>
+                                <form onSubmit={handleAddJob} style={{ padding: "0 40px 40px", display: "flex", flexDirection: "column", gap: "20px" }}>
+                                    <input
+                                        autoFocus
+                                        placeholder="Company Name"
+                                        value={newJob.company}
+                                        onChange={e => setNewJob({ ...newJob, company: e.target.value })}
+                                        required
+                                        style={{ width: "100%", padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1.05rem", fontWeight: 500, outline: "none", color: "#1d1d1f" }}
+                                        onFocus={e => e.target.style.background = "white"}
+                                        onBlur={e => e.target.style.background = "#f5f5f7"}
+                                    />
+                                    <input
+                                        placeholder="Role Title"
+                                        value={newJob.role}
+                                        onChange={e => setNewJob({ ...newJob, role: e.target.value })}
+                                        required
+                                        style={{ width: "100%", padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1.05rem", fontWeight: 500, outline: "none", color: "#1d1d1f" }}
+                                        onFocus={e => e.target.style.background = "white"}
+                                        onBlur={e => e.target.style.background = "#f5f5f7"}
+                                    />
+                                    <div style={{ display: "flex", gap: "12px" }}>
+                                        <select
+                                            value={newJob.status}
+                                            onChange={e => setNewJob({ ...newJob, status: e.target.value })}
+                                            style={{ flex: 1, padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1rem", outline: "none", cursor: "pointer", color: "#1d1d1f", fontWeight: 500 }}
+                                        >
+                                            {COLUMNS.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                                        </select>
+                                    </div>
+                                    <input
+                                        placeholder="Job Post URL (Optional)"
+                                        value={newJob.url}
+                                        onChange={e => setNewJob({ ...newJob, url: e.target.value })}
+                                        style={{ width: "100%", padding: "18px", borderRadius: "16px", background: "#f5f5f7", border: "1px solid transparent", fontSize: "1.05rem", fontWeight: 500, outline: "none", color: "#1d1d1f" }}
+                                        onFocus={e => e.target.style.background = "white"}
+                                        onBlur={e => e.target.style.background = "#f5f5f7"}
+                                    />
+
+                                    <div style={{ display: "flex", gap: "16px", marginTop: "16px" }}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsAdding(false)}
+                                            style={{ flex: 1, padding: "18px", borderRadius: "100px", background: "transparent", border: "none", color: "#86868b", fontWeight: 700, cursor: "pointer", fontSize: "1rem" }}
+                                        >
+                                            Cancel
+                                        </button>
+                                        <button
+                                            type="submit"
+                                            disabled={isSubmitting}
+                                            style={{
+                                                flex: 1, padding: "18px", borderRadius: "100px",
+                                                background: isSubmitting ? "#9ca3af" : "#1d1d1f",
+                                                color: "white", border: "none", fontWeight: 700,
+                                                cursor: isSubmitting ? "not-allowed" : "pointer",
+                                                boxShadow: isSubmitting ? "none" : "0 10px 20px -5px rgba(0,0,0,0.2)", fontSize: "1rem",
+                                                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px"
+                                            }}
+                                        >
+                                            {isSubmitting ? "Saving..." : "Create Application"}
+                                        </button>
+                                    </div>
+                                </form>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+                {/* JOB DETAILS DRAWER */}
+                <AnimatePresence>
+                    {selectedJob && (
+                        <>
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setSelectedJob(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.2)", backdropFilter: "blur(4px)", zIndex: 2000 }} />
+                            <motion.div
+                                initial={{ x: "100%" }} animate={{ x: 0 }} exit={{ x: "100%" }} transition={{ type: "spring", damping: 25, stiffness: 200 }}
+                                style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: "500px", maxWidth: "100%", background: "#ffffff", zIndex: 2001, boxShadow: "-10px 0 40px rgba(0,0,0,0.1)", display: "flex", flexDirection: "column" }}
+                            >
+                                {/* Drawer Header */}
+                                <div style={{ padding: "32px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                    <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+                                        <div style={{ width: 64, height: 64, borderRadius: 16, background: "#f8fafc", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.5rem", fontWeight: 700, color: "#64748b" }}>
+                                            {selectedJob.company ? selectedJob.company.substring(0, 2).toUpperCase() : "??"}
+                                        </div>
+                                        <div>
+                                            <h2 style={{ margin: 0, fontSize: "1.5rem", fontWeight: 800, color: "#1e293b" }}>{selectedJob.role}</h2>
+                                            <div style={{ fontSize: "1rem", color: "#64748b", fontWeight: 500 }}>{selectedJob.company}</div>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setSelectedJob(null)} style={{ background: "#f1f5f9", border: "none", width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", color: "#64748b" }}>
+                                        <FaTimesCircle />
+                                    </button>
+                                </div>
+
+                                {/* Drawer Content */}
+                                <div style={{ flex: 1, overflowY: "auto", padding: "32px", display: "flex", flexDirection: "column", gap: "32px" }}>
+
+                                    {/* Status Selector */}
+                                    <div>
+                                        <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, color: "#94a3b8", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "1px" }}>Current Stage</label>
+                                        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                            {COLUMNS.map(col => (
+                                                <button
+                                                    key={col.id}
+                                                    onClick={() => handleUpdateJob(selectedJob.id, { status: col.id })}
+                                                    style={{
+                                                        padding: "8px 16px", borderRadius: "100px",
+                                                        background: selectedJob.status === col.id ? col.bg : "white",
+                                                        border: `1px solid ${selectedJob.status === col.id ? col.bg : "#e2e8f0"}`,
+                                                        color: selectedJob.status === col.id ? col.color : "#64748b",
+                                                        fontWeight: 700, fontSize: "0.85rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px"
+                                                    }}
+                                                >
+                                                    {selectedJob.status === col.id && <FaCheckCircle />} {col.label}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Salary & Date Grid */}
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, color: "#94a3b8", marginBottom: "8px" }}>Salary (Per Annum)</label>
+                                            <div style={{ display: "flex", gap: "8px" }}>
+                                                <select
+                                                    value={selectedJob.salaryCurrency || '$'}
+                                                    onChange={(e) => handleUpdateJob(selectedJob.id, { salaryCurrency: e.target.value })}
+                                                    style={{ width: "70px", padding: "12px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#f8fafc", fontWeight: 700, color: "#64748b", fontSize: "1rem", outline: "none", cursor: "pointer", textAlign: "center" }}
+                                                >
+                                                    <option value="$">$</option>
+                                                    <option value="₹">₹</option>
+                                                </select>
+                                                <input
+                                                    type="number"
+                                                    placeholder="e.g. 120000"
+                                                    value={selectedJob.salary || ''}
+                                                    onChange={(e) => handleUpdateJob(selectedJob.id, { salary: e.target.value })}
+                                                    style={{ flex: 1, padding: "12px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#f8fafc", fontWeight: 600, color: "#1e293b", outline: "none", boxSizing: "border-box" }}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label style={{ display: "block", fontSize: "0.85rem", fontWeight: 700, color: "#94a3b8", marginBottom: "8px" }}>Job Link</label>
+                                            <div style={{ display: "flex", gap: "8px" }}>
+                                                <input
+                                                    type="text"
+                                                    placeholder="Paste URL..."
+                                                    value={selectedJob.url || ''}
+                                                    onChange={(e) => handleUpdateJob(selectedJob.id, { url: e.target.value })}
+                                                    style={{ flex: 1, padding: "12px", borderRadius: "12px", border: "1px solid #e2e8f0", background: "#f8fafc", fontWeight: 500, color: "#334155", outline: "none", boxSizing: "border-box", minWidth: 0 }}
+                                                />
+                                                {selectedJob.url && (
+                                                    <a
+                                                        href={selectedJob.url}
+                                                        target="_blank"
+                                                        rel="noreferrer"
+                                                        title="Open Link"
+                                                        style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "44px", borderRadius: "12px", background: "#eff6ff", color: "#3b82f6", textDecoration: "none", border: "1px solid #dbeafe" }}
+                                                    >
+                                                        <FaExternalLinkAlt size={14} />
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Notes Section */}
+                                    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+                                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                                            <label style={{ fontSize: "0.85rem", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "1px" }}>Add Notes</label>
+                                            <div style={{ display: "flex", gap: "12px" }}>
+                                                <button onClick={handleGenerateCoverLetter} style={{ border: "none", background: "none", color: "#8b5cf6", fontWeight: 600, cursor: "pointer", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "6px" }}>
+                                                    <FaMagic size={12} /> Tailor Resume
+                                                </button>
+                                                <button onClick={generateEmail} style={{ border: "none", background: "none", color: "#3b82f6", fontWeight: 600, cursor: "pointer", fontSize: "0.85rem" }}>
+                                                    + Draft Follow-up
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <textarea
+                                            placeholder="Paste job description here, write interview notes, or list questions for the recruiter..."
+                                            value={selectedJob.notes || ''}
+                                            onChange={(e) => handleUpdateJob(selectedJob.id, { notes: e.target.value })}
+                                            style={{ width: "100%", minHeight: "200px", flex: 1, padding: "20px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#fefefe", outline: "none", lineHeight: 1.6, color: "#334155", fontSize: "0.95rem", resize: "none", fontFamily: "'Inter', sans-serif" }}
+                                        />
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </>
+                    )}
+                </AnimatePresence>
+
+                {/* COVER LETTER CONFIRMATION MODAL */}
+                <AnimatePresence>
+                    {isCoverLetterModalOpen && (
+                        <div style={{
+                            position: "fixed", inset: 0, zIndex: 3000,
+                            background: "rgba(0,0,0,0.4)", backdropFilter: "blur(5px)",
+                            display: "flex", alignItems: "center", justifyContent: "center"
+                        }}>
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                style={{
+                                    background: "white", padding: "32px", borderRadius: "24px",
+                                    width: "400px", maxWidth: "90%", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)",
+                                    textAlign: "center"
+                                }}
+                            >
+                                <div style={{ width: "60px", height: "60px", background: "#f5f3ff", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px" }}>
+                                    <FaMagic size={24} color="#8b5cf6" />
+                                </div>
+                                <h3 style={{ margin: "0 0 12px 0", fontSize: "1.4rem", color: "#1e293b", fontWeight: 800 }}>Create Cover Letter</h3>
+                                <p style={{ margin: "0 0 24px 0", color: "#64748b", lineHeight: 1.5 }}>
+                                    To write a perfect cover letter, we need to match this job against your resume.
+                                </p>
+                                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                                     <button
-                                        type="button"
-                                        onClick={() => setIsAdding(false)}
-                                        style={{ flex: 1, padding: "18px", borderRadius: "100px", background: "transparent", border: "none", color: "#86868b", fontWeight: 700, cursor: "pointer", fontSize: "1rem" }}
+                                        onClick={confirmRedirectToBuilder}
+                                        style={{
+                                            padding: "14px", borderRadius: "100px", border: "none",
+                                            background: "#1d1d1f", color: "white", fontWeight: 700,
+                                            cursor: "pointer", fontSize: "1rem", boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)"
+                                        }}
+                                    >
+                                        Open in Resume Builder
+                                    </button>
+                                    <button
+                                        onClick={() => setIsCoverLetterModalOpen(false)}
+                                        style={{
+                                            padding: "14px", borderRadius: "100px", border: "none",
+                                            background: "transparent", color: "#64748b", fontWeight: 600,
+                                            cursor: "pointer", fontSize: "0.95rem"
+                                        }}
                                     >
                                         Cancel
                                     </button>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
+
+                {/* FOLLOW UP EMAIL MODAL */}
+                <AnimatePresence>
+                    {isFollowUpModalOpen && (
+                        <div style={{
+                            position: "fixed", inset: 0, zIndex: 3000,
+                            background: "rgba(0,0,0,0.4)", backdropFilter: "blur(5px)",
+                            display: "flex", alignItems: "center", justifyContent: "center"
+                        }}>
+                            <motion.div
+                                initial={{ scale: 0.9, opacity: 0 }}
+                                animate={{ scale: 1, opacity: 1 }}
+                                exit={{ scale: 0.9, opacity: 0 }}
+                                style={{
+                                    background: "white", padding: "32px", borderRadius: "24px",
+                                    width: "500px", maxWidth: "90%", boxShadow: "0 25px 50px -12px rgba(0,0,0,0.25)"
+                                }}
+                            >
+                                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+                                    <div style={{ width: "40px", height: "40px", background: "#eff6ff", borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                                        <FaCommentAlt size={18} color="#3b82f6" />
+                                    </div>
+                                    <h3 style={{ margin: 0, fontSize: "1.2rem", fontWeight: 800, color: "#1e293b" }}>Draft Follow-up Email</h3>
+                                </div>
+
+                                <textarea
+                                    readOnly
+                                    value={followUpText}
+                                    style={{
+                                        width: "100%", height: "200px", padding: "16px", borderRadius: "12px",
+                                        background: "#f8fafc", border: "1px solid #e2e8f0", color: "#334155",
+                                        fontFamily: "monospace", fontSize: "0.9rem", resize: "none", outline: "none",
+                                        marginBottom: "24px"
+                                    }}
+                                />
+
+                                <div style={{ display: "flex", gap: "12px" }}>
                                     <button
-                                        type="submit"
-                                        disabled={isSubmitting}
+                                        onClick={handleCopyFollowUp}
                                         style={{
-                                            flex: 1, padding: "18px", borderRadius: "100px",
-                                            background: isSubmitting ? "#9ca3af" : "#1d1d1f",
-                                            color: "white", border: "none", fontWeight: 700,
-                                            cursor: isSubmitting ? "not-allowed" : "pointer",
-                                            boxShadow: isSubmitting ? "none" : "0 10px 20px -5px rgba(0,0,0,0.2)", fontSize: "1rem",
+                                            flex: 1, padding: "14px", borderRadius: "100px", border: "none",
+                                            background: "#3b82f6", color: "white", fontWeight: 700,
+                                            cursor: "pointer", fontSize: "1rem", boxShadow: "0 10px 15px -3px rgba(59, 130, 246, 0.3)",
                                             display: "flex", alignItems: "center", justifyContent: "center", gap: "8px"
                                         }}
                                     >
-                                        {isSubmitting ? "Saving..." : "Create Application"}
+                                        <FaCopy /> Copy to Clipboard
+                                    </button>
+                                    <button
+                                        onClick={() => setIsFollowUpModalOpen(false)}
+                                        style={{
+                                            flex: 1, padding: "14px", borderRadius: "100px", border: "none",
+                                            background: "#f1f5f9", color: "#64748b", fontWeight: 700,
+                                            cursor: "pointer", fontSize: "1rem"
+                                        }}
+                                    >
+                                        Close
                                     </button>
                                 </div>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
 
-            {/* Custom Scrollbars */}
-            <style>{`
+                {/* Custom Scrollbars */}
+                <style>{`
                 ::-webkit-scrollbar { height: 8px; width: 8px; }
                 ::-webkit-scrollbar-track { background: transparent; }
                 ::-webkit-scrollbar-thumb { background: #d1d5db; borderRadius: 4px; }
                 ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
                 input::placeholder { color: #9ca3af; }
             `}</style>
-        </div>
+            </div>
+        </div >
     );
 }
 

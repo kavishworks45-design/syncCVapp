@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, useScroll, useTransform } from "framer-motion";
-import { FaRocket, FaMagic, FaCheckCircle, FaArrowRight, FaFileAlt, FaRobot, FaGoogle, FaBriefcase, FaSearch, FaApple, FaAmazon, FaMicrosoft, FaLightbulb, FaPen, FaTrophy, FaChartLine } from "react-icons/fa";
+import { FaRocket, FaMagic, FaCheckCircle, FaArrowRight, FaFileAlt, FaRobot, FaGoogle, FaBriefcase, FaSearch, FaApple, FaAmazon, FaMicrosoft, FaLightbulb, FaPen, FaTrophy, FaChartLine, FaCrown, FaGem } from "react-icons/fa";
 import { signInWithPopup } from "firebase/auth";
 import { auth, provider } from "../firebase";
 
@@ -37,12 +37,12 @@ const FloatingIcon = ({ icon: Icon, color, top, left, delay, size }) => (
     </motion.div>
 );
 
-const ParallaxCard = ({ children, offset = 0 }) => {
+const ParallaxCard = ({ children, offset = 0, style = {} }) => {
     // const { scrollYProgress } = useScroll();
     // const y = useTransform(scrollYProgress, [0, 1], [0, offset]);
 
     return (
-        <motion.div>
+        <motion.div style={style}>
             {children}
         </motion.div>
     );
@@ -66,8 +66,17 @@ function LandingPage({ onStart, isLoggedIn, onLogin }) {
         visible: { opacity: 1, y: 0, transition: { duration: 0.6 } }
     };
 
-    const handleAction = () => {
-        onStart();
+    const handleAction = async () => {
+        setLoading(true);
+        try {
+            await signInWithPopup(auth, provider);
+            // App.jsx effect detects user and redirects
+            // onStart(); // No longer strictly needed if App.jsx redirects, but keeps flow safe
+        } catch (error) {
+            console.error("Login failed:", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -86,6 +95,8 @@ function LandingPage({ onStart, isLoggedIn, onLogin }) {
                 <FloatingIcon icon={FaPen} color="#ec4899" top="35%" left="94%" delay={2.5} size="45px" />
                 <FloatingIcon icon={FaTrophy} color="#f59e0b" top="70%" left="4%" delay={0.5} size="65px" />
                 <FloatingIcon icon={FaChartLine} color="#06b6d4" top="75%" left="82%" delay={3.5} size="55px" />
+                <FloatingIcon icon={FaGem} color="#c026d3" top="60%" left="15%" delay={2.2} size="45px" />
+                <FloatingIcon icon={FaCrown} color="#1e293b" top="40%" left="10%" delay={1.8} size="50px" />
             </div>
 
             {/* Hero Section */}
@@ -160,60 +171,77 @@ function LandingPage({ onStart, isLoggedIn, onLogin }) {
             </motion.div>
 
 
-            {/* Feature Grid with PARALLAX */}
+            {/* Feature Grid with BENTO LAYOUT */}
             <motion.div
-                initial={{ opacity: 1, y: 0 }} // DEBUG: Force visible
+                initial={{ opacity: 1, y: 0 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-100px" }}
-                transition={{ duration: 0.8 }}
+                viewport={{ once: true }}
                 style={{
                     display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                    gap: "32px",
+                    gridTemplateColumns: "repeat(3, 1fr)",
+                    gridAutoRows: "minmax(250px, auto)",
+                    gap: "24px",
                     width: "100%",
-                    textAlign: "left",
-                    zIndex: 2,
-                    position: "relative"
+                    maxWidth: "1100px",
+                    margin: "0 auto",
+                    position: "relative",
+                    zIndex: 2
                 }}
             >
-                {/* Feature 1 - Slight upward pull */}
-                <ParallaxCard offset={-50}>
-                    <div className="modern-card" style={{ padding: "40px", height: "100%" }}>
-                        <div style={{ width: "56px", height: "56px", background: "#eff6ff", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px" }}>
-                            <FaFileAlt size={28} color="#3b82f6" />
+                {/* 1. UPLOAD (Tall Card Left) */}
+                <ParallaxCard style={{ gridColumn: "span 1", gridRow: "span 2" }}>
+                    <div className="modern-card" style={{ padding: "40px", height: "100%", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                        <div>
+                            <div style={{ width: "64px", height: "64px", background: "#eff6ff", borderRadius: "20px", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "30px" }}>
+                                <FaFileAlt size={32} color="#3b82f6" />
+                            </div>
+                            <h3 style={{ fontSize: "1.8rem", fontWeight: 700, marginBottom: "16px", color: "var(--primary)" }}>Smart Resume Parsing</h3>
+                            <p style={{ color: "var(--secondary)", lineHeight: 1.6, fontSize: "1.1rem" }}>
+                                Upload your PDF. We extract every detail with high precision, ready for AI optimization.
+                            </p>
                         </div>
-                        <h3 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "12px", color: "var(--primary)" }}>Upload Resume</h3>
-                        <p style={{ color: "var(--secondary)", lineHeight: 1.7, fontSize: "1rem" }}>
-                            Upload your existing PDF. We preserve your contact details and history while preparing it for AI analysis.
-                        </p>
+                        <div style={{ width: "100%", height: "150px", background: "linear-gradient(180deg, #f1f5f9 0%, white 100%)", borderRadius: "16px", marginTop: "30px", border: "1px dashed #cbd5e1" }}></div>
                     </div>
                 </ParallaxCard>
 
-                {/* Feature 2 - Deeper parallax (moves more) */}
-                <ParallaxCard offset={-100}>
-                    <div className="modern-card" style={{ padding: "40px", height: "100%" }}>
-                        <div style={{ width: "56px", height: "56px", background: "#f5f3ff", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px" }}>
-                            <FaRobot size={28} color="#8b5cf6" />
+                {/* 2. AI ANALYSIS (Wide Card Top Right) */}
+                <ParallaxCard style={{ gridColumn: "span 2" }}>
+                    <div className="modern-card" style={{ padding: "40px", height: "100%", display: "flex", alignItems: "center", gap: "30px", background: "linear-gradient(135deg, #fff 0%, #f5f3ff 100%)" }}>
+                        <div style={{ flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+                                <div style={{ padding: "10px", background: "#8b5cf6", borderRadius: "10px" }}><FaRobot color="white" size={20} /></div>
+                                <h3 style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--primary)", margin: 0 }}>Advanced AI Engine</h3>
+                            </div>
+                            <p style={{ color: "var(--secondary)", lineHeight: 1.6, fontSize: "1.1rem" }}>
+                                Analyzes job descriptions and rewrites your resume content to beat Applicant Tracking Systems (ATS).
+                            </p>
                         </div>
-                        <h3 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "12px", color: "var(--primary)" }}>AI Analysis</h3>
-                        <p style={{ color: "var(--secondary)", lineHeight: 1.7, fontSize: "1rem" }}>
-                            Our Gemini-powered engine extracts keywords from the Job Description and suggests targeted improvements.
-                        </p>
                     </div>
                 </ParallaxCard>
 
-                {/* Feature 3 - Slight upward pull */}
-                <ParallaxCard offset={-50}>
-                    <div className="modern-card" style={{ padding: "40px", height: "100%" }}>
-                        <div style={{ width: "56px", height: "56px", background: "#ecfdf5", borderRadius: "16px", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "24px" }}>
-                            <FaMagic size={28} color="#10b981" />
+                {/* 3. PREMIUM DESIGNS (Standard Card Middle) */}
+                <ParallaxCard style={{ gridColumn: "span 1" }}>
+                    <div className="modern-card" style={{ padding: "30px", height: "100%", background: "#fdf4ff", border: "1px solid #fae8ff" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "20px" }}>
+                            <FaCrown size={28} color="#d946ef" />
+                            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "#d946ef", background: "white", padding: "4px 8px", borderRadius: "6px" }}>NEW</span>
                         </div>
-                        <h3 style={{ fontSize: "1.4rem", fontWeight: 700, marginBottom: "12px", color: "var(--primary)" }}>Instant Adaptation</h3>
-                        <p style={{ color: "var(--secondary)", lineHeight: 1.7, fontSize: "1rem" }}>
-                            Watch as your Experience and Skills are rewritten in real-time to align with what recruiters want.
-                        </p>
+                        <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: "10px", color: "#86198f" }}>Premium Designs</h3>
+                        <p style={{ color: "var(--secondary)", fontSize: "0.95rem" }}>Creative & Executive templates.</p>
                     </div>
                 </ParallaxCard>
+
+                {/* 4. INSTANT ADAPTATION (Standard Card Right) */}
+                <ParallaxCard style={{ gridColumn: "span 1" }}>
+                    <div className="modern-card" style={{ padding: "30px", height: "100%" }}>
+                        <div style={{ width: "48px", height: "48px", background: "#ecfdf5", borderRadius: "12px", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: "20px" }}>
+                            <FaMagic size={24} color="#10b981" />
+                        </div>
+                        <h3 style={{ fontSize: "1.3rem", fontWeight: 700, marginBottom: "10px", color: "var(--primary)" }}>Instant Tailoring</h3>
+                        <p style={{ color: "var(--secondary)", fontSize: "0.95rem" }}>One-click optimization.</p>
+                    </div>
+                </ParallaxCard>
+
             </motion.div>
 
             {/* --- HOW IT WORKS SECTION --- */}
@@ -277,7 +305,7 @@ function LandingPage({ onStart, isLoggedIn, onLogin }) {
                         <h3 style={{ fontSize: "2.5rem", fontWeight: 800, color: "var(--primary)", marginBottom: "8px" }}>₹200<span style={{ fontSize: "1rem", color: "#94a3b8", fontWeight: 500 }}>/mo</span></h3>
                         <p style={{ color: "var(--secondary)", marginBottom: "30px", fontSize: "0.95rem" }}>For serious job seekers.</p>
                         <ul style={{ listStyle: "none", padding: 0, marginBottom: "40px", flex: 1, display: "flex", flexDirection: "column", gap: "16px" }}>
-                            {["Unlimited Optimizations", "Smart AI Tailoring", "Advanced Job Search", "Cover Letter Generator", "Priority Email Support"].map((feat, i) => (
+                            {["Unlimited Optimizations", "Smart AI Tailoring", "Premium Resume Templates", "Advanced Job Search", "Coach Analysis (AI)", "Priority Email Support"].map((feat, i) => (
                                 <li key={i} style={{ display: "flex", alignItems: "center", gap: "10px", color: "var(--primary)", fontSize: "0.95rem" }}>
                                     <FaCheckCircle color="#3b82f6" /> {feat}
                                 </li>
