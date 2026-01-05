@@ -341,7 +341,11 @@ body {
     /* User will toggle it */
   }
 
-  .resume-editor-main {
+  .mobile-hidden {
+    display: none !important;
+  }
+
+  .editor-main {
     padding: 1rem !important;
   }
 
