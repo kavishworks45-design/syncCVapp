@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
-import { FaCheck, FaTimes, FaEnvelope, FaGlobe, FaMagic, FaExclamationCircle, FaPen, FaArrowDown, FaPalette, FaGoogle, FaLock, FaFileAlt, FaLinkedin, FaCopy, FaSave, FaCrown, FaGem, FaEye } from "react-icons/fa";
+import { FaCheck, FaTimes, FaEnvelope, FaGlobe, FaMagic, FaExclamationCircle, FaPen, FaArrowDown, FaPalette, FaGoogle, FaLock, FaFileAlt, FaLinkedin, FaCopy, FaSave, FaCrown, FaGem, FaEye, FaArrowLeft } from "react-icons/fa";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import axios from 'axios';
@@ -732,6 +732,15 @@ function ResumeEditor({ data, file, onBack, user, matchScore = 0 }) {
 
       {/* === MAIN PREVIEW AREA === */}
       <div className={"editor-main " + (!mobilePreviewMode ? "mobile-hidden" : "")} style={{ flex: 1, overflowY: "auto", overflowX: "hidden", display: "flex", flexDirection: "column", alignItems: "center", padding: "40px 20px" }}>
+
+        {/* Mobile Back Header */}
+        <div className="mobile-visible" style={{ width: "100%", paddingBottom: "16px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <button onClick={onBack} style={{ background: "white", padding: "10px", borderRadius: "50%", boxShadow: "0 2px 5px rgba(0,0,0,0.1)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+            <FaArrowLeft size={16} color="#334155" />
+          </button>
+          <span style={{ fontWeight: 600, color: "#334155" }}>Back</span>
+        </div>
+
         {/* Zoom/Toolbar Hint (Optional) */}
         <div style={{ marginBottom: "20px", color: "#94a3b8", fontSize: "0.85rem", display: "flex", gap: "20px" }}>
           <span><FaPen size={12} /> Click text to edit</span>
